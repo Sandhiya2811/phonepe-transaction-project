@@ -150,7 +150,7 @@ Recommendations:
 •	Give regional language awareness campaigns.
 •	Onboard local kirana stores to increase merchant usage.
 ________________________________________
-✅ Overall Summary
+Overall Summary
 •	PhonePe is growing strongly, but usage is not equal in all states.
 •	Festivals and urban states give maximum growth.
 •	Need to improve merchant payments in rural and small states.
@@ -197,7 +197,7 @@ Recommendations:
 •	For declining brands, keep support but reduce spend.
 •	Launch festival campaigns during Q3/Q4 for higher engagement.
 ________________________________________
-✅ Overall Summary
+Overall Summary
 •	Xiaomi, Samsung, Vivo are the main drivers of user adoption.
 •	Some brands have high registrations but poor engagement → need action.
 •	Brand popularity changes by state and over time, so strategies must be flexible.
@@ -240,7 +240,7 @@ Recommendations:
 •	Maintain customer engagement in Q1 & Q2 with special offers.
 •	Use seasonal insights to design yearly marketing plans.
 ________________________________________
-✅ Overall Summary
+Overall Summary
 •	Top states, districts, and pincodes dominate insurance transactions, mostly urban-focused.
 •	Rural and small districts are underpenetrated and need more awareness.
 •	Growth is steady, but seasonal trends (festivals, tax time) make Q3 & Q4 most important.
@@ -297,23 +297,10 @@ ________________________________________
 
 
 
-✅ Overall Summary
+Overall Summary
 •	Transactions are highly concentrated in metro states, districts, and urban pincodes.
 •	Rural and semi-urban areas remain underutilized.
 •	Focusing on merchant onboarding, rural awareness, and premium services in top states will balance growth and improve engagement.
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -361,7 +348,7 @@ Recommendations:
 •	Use advertisements in low-growth states to push adoption.
 •	Monitor quarterly patterns and adjust marketing spend accordingly.
 ________________________________________
-✅ Overall Summary
+Overall Summary
 •	Most users come from large states and metro cities, while rural and small regions are underrepresented.
 •	Registrations peak during festival quarters, showing seasonal patterns.
 •	With targeted rural campaigns, regional offers, and festival promotions, PhonePe can expand its user base across India.
