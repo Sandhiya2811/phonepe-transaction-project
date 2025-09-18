@@ -9,29 +9,23 @@ import os
 import psycopg2
 import pandas as pd
 from sqlalchemy import create_engine
-from dotenv import load_dotenv
 
-load_dotenv()
+import mysql.connector
 
-RENDER_DB_HOST = os.getenv("RENDER_DB_HOST")
-RENDER_DB_NAME = os.getenv("RENDER_DB_NAME")
-RENDER_DB_USER = os.getenv("RENDER_DB_USER")
-RENDER_DB_PASSWORD = os.getenv("RENDER_DB_PASSWORD")
-RENDER_DB_PORT = os.getenv("RENDER_DB_PORT")
+conn = mysql.connector.connect(
+    host='localhost',
+    user='root',
+    password='Subash@28',  #your password
+    database='practice'    #schema name
+)
 
-# Connection string
-DB_CONFIG = {
-    'host': RENDER_DB_HOST,
-    'dbname': RENDER_DB_NAME,
-    'user': RENDER_DB_USER,
-    'password': RENDER_DB_PASSWORD,
-    'port': RENDER_DB_PORT
-}
+cur = conn.cursor()
 
 from sqlalchemy import create_engine
 
-
-engine = create_engine(f"postgresql+psycopg2://{RENDER_DB_USER}:{RENDER_DB_PASSWORD}@{RENDER_DB_HOST}:{RENDER_DB_PORT}/{RENDER_DB_NAME}")
+engine = create_engine(
+    "mysql+mysqlconnector://root:Subash%4028@localhost:3306/practice"
+)
 
 
 
@@ -126,15 +120,17 @@ if b == 'Home':
             selected_quarter = st.selectbox("Select Year and Quarter", quarter_list)
 
             st.write("You selected:", selected_quarter)
-                
-            year_val, q_val = selected_quarter.split("-Q")   
-        
+
+            year_val, q_val = selected_quarter.split("-Q")
+
+            
             query_map = f"""
                         SELECT state, SUM(transaction_amount) AS total_amount
                         FROM aggregated_transaction
-                        WHERE year::text = '{year_val}' AND quarter::text = '{q_val}'
+                        WHERE year = '{year_val}' AND quarter = '{q_val}'
                         GROUP BY state;
-                    """
+                        """
+
             df_map = pd.read_sql(query_map, engine)
                 
             df_map["state"] = (
@@ -222,36 +218,36 @@ if b == 'Home':
                 st.subheader("Top 10 States - Registered Users")
                 st.dataframe(df)
             
+            
             query_quarter = """
-                SELECT year, quarter, state,
-                    SUM("registeredUsers") AS total_users,
-                    SUM("appOpens") AS total_appopens
-                FROM map_user
-                GROUP BY year, quarter, state
-                ORDER BY year, quarter, state;
-                """
+                            SELECT year, quarter, state,
+                                SUM(`registeredUsers`) AS total_users,
+                                SUM(`appOpens`) AS total_appopens
+                            FROM map_user
+                            GROUP BY year, quarter, state
+                            ORDER BY year, quarter, state;
+                            """
 
+           
             df_quarter = pd.read_sql(query_quarter, engine)
 
-            
             df_quarter["Period"] = df_quarter["year"].astype(str) + "-Q" + df_quarter["quarter"].astype(str)
-            
-            
+
+           
             quarter_list = df_quarter['Period'].unique().tolist()
             selected_quarter = st.selectbox("Select Year and Quarter", quarter_list)
 
             st.write("You selected:", selected_quarter)
-                
-            
-            year_val, q_val = selected_quarter.split("-Q")  
 
-            
+            year_val, q_val = selected_quarter.split("-Q")
+
+       
             df_map = df_quarter[
-                (df_quarter["year"].astype(str) == year_val) & 
+                (df_quarter["year"].astype(str) == year_val) &
                 (df_quarter["quarter"].astype(str) == q_val)
             ].copy()
 
-            
+    
             df_map["state"] = (
                 df_map["state"]
                 .str.replace("-", " ")
@@ -265,20 +261,23 @@ if b == 'Home':
                 "raw/e388c4cae20aa53cb5090210a42ebb9b765c0a36/india_states.geojson"
             )
 
-            
+      
             fig = px.choropleth(
                         df_map,
                         geojson=india_geojson_url,
                         featureidkey="properties.ST_NM",
                         locations="state",
-                        color="state",   # 🔹 state-wise different color
+                        color="state",   
                         color_discrete_sequence=px.colors.qualitative.Set3,
                         hover_name="state",
                         hover_data=["total_users", "total_appopens"],
                         title=f"Registered Users & App Opens - {selected_quarter}"
                     )
+
+         
             fig.update_geos(fitbounds="locations", visible=False)
 
+         
             st.plotly_chart(fig, use_container_width=True)
 
     if data == 'INSURANCE': 
@@ -347,41 +346,39 @@ if b == 'Home':
             st.dataframe(df)
         
         query_quarter = """
-            SELECT year, quarter,
-                SUM("Insurance_amount") AS total_ins_amount,
-                SUM("Insurance_count") AS total_ins_count
-            FROM aggregated_insurance
-            GROUP BY year, quarter
-            ORDER BY year, quarter;
-            """
+                        SELECT `year`, `quarter`,
+                            SUM(Insurance_amount) AS total_ins_amount,
+                            SUM(Insurance_count) AS total_ins_count
+                        FROM aggregated_insurance
+                        GROUP BY `year`, `quarter`
+                        ORDER BY `year`, `quarter`;
+                        """
         df_quarter = pd.read_sql(query_quarter, engine)
-        
-        
 
         
         df_quarter['Period'] = df_quarter['year'].astype(str) + "-Q" + df_quarter['quarter'].astype(str)
 
-       
+     
         quarter_list = df_quarter['Period'].tolist()
         selected_quarter = st.selectbox("Select Year and Quarter", quarter_list)
         st.write("You selected:", selected_quarter)
 
-      
+        
         year_val, q_val = selected_quarter.split("-Q")
 
-     
+  
         query_map = f"""
-            SELECT state,
-                AVG("Insurance_amount") AS avg_ins_amount,
-                SUM("Insurance_amount") AS total_ins_amount,
-                SUM("Insurance_count") AS total_ins_count
-            FROM aggregated_insurance
-            WHERE year::text = '{year_val}' AND quarter::text = '{q_val}'
-            GROUP BY state;
-        """
+                    SELECT state,
+                        AVG(Insurance_amount) AS avg_ins_amount,
+                        SUM(Insurance_amount) AS total_ins_amount,
+                        SUM(Insurance_count) AS total_ins_count
+                    FROM aggregated_insurance
+                    WHERE `year` = {year_val} AND `quarter` = {q_val}
+                    GROUP BY state;
+                """
         df_map = pd.read_sql(query_map, engine)
 
-        
+   
         df_map["state"] = (
             df_map["state"]
             .str.replace("-", " ")
@@ -390,27 +387,26 @@ if b == 'Home':
 
         import plotly.express as px
 
-      
+   
         india_geojson_url = (
             "https://gist.githubusercontent.com/jbrobst/56c13bbbf9d97d187fea01ca62ea5112/"
             "raw/e388c4cae20aa53cb5090210a42ebb9b765c0a36/india_states.geojson"
         )
 
-        
+    
         fig = px.choropleth(
                 df_map,
                 geojson=india_geojson_url,
                 featureidkey="properties.ST_NM",
                 locations="state",
-                color="state",   # 🔹 Each state different color
+                color="state",   
                 color_discrete_sequence=px.colors.qualitative.Set3,
                 title=f"Insurance Overview - {selected_quarter}",
-                hover_data=["total_ins_amount", "total_ins_count", "avg_ins_amount"],  
+                hover_data=["total_ins_amount", "total_ins_count", "avg_ins_amount"],
                 scope="asia"
             )
         fig.update_geos(fitbounds="locations", visible=False)
         st.plotly_chart(fig, use_container_width=True)
-       
         
 
 
@@ -525,9 +521,9 @@ if b == 'Scenario':
             st.header('State vs Transaction Type')
             
             query_heatmap = """
-                            SELECT "state", "transaction_type", SUM("transaction_amount") AS total_amount
+                            SELECT state, transaction_type, SUM(transaction_amount) AS total_amount
                             FROM aggregated_transaction
-                            GROUP BY "state", "transaction_type"
+                            GROUP BY state, transaction_type
                             ORDER BY total_amount DESC;
                             """
 
@@ -566,9 +562,9 @@ if b == 'Scenario':
             st.header("which mobile brand has the most registered users")
             
             query_brand_share = """
-                                SELECT "install_mobile_brand", SUM("reg_user_brand") AS total_users
+                                SELECT install_mobile_brand, SUM(reg_user_brand) AS total_users
                                 FROM aggregated_user
-                                GROUP BY "install_mobile_brand"
+                                GROUP BY install_mobile_brand
                                 ORDER BY total_users DESC;
                                 """
 
@@ -593,9 +589,9 @@ if b == 'Scenario':
             st.header('high registration but low engagement')
             
             query_engagement = """
-                                SELECT "install_mobile_brand", SUM("reg_user_brand") AS reg_users, SUM("appOpens") AS total_app_opens
+                                SELECT install_mobile_brand, SUM(reg_user_brand) AS reg_users, SUM(appOpens) AS total_app_opens
                                 FROM aggregated_user
-                                GROUP BY "install_mobile_brand"
+                                GROUP BY install_mobile_brand
                                 ORDER BY reg_users DESC;
                                 """
 
@@ -624,10 +620,10 @@ if b == 'Scenario':
             st.header('Which brands are popular in each state')
             
             query_region = """
-                            SELECT "state", "install_mobile_brand", SUM("reg_user_brand") AS reg_users
+                            SELECT state, install_mobile_brand, SUM(reg_user_brand) AS reg_users
                             FROM aggregated_user
-                            GROUP BY "state", "install_mobile_brand"
-                            ORDER BY "state", reg_users DESC;
+                            GROUP BY state, install_mobile_brand
+                            ORDER BY state, reg_users DESC;
                             """
 
             df_region = pd.read_sql(query_region, engine)
@@ -654,10 +650,10 @@ if b == 'Scenario':
             st.header('how brand usage changes across years/quarters')
             
             query_trend = """
-                            SELECT "year", "quarter", "install_mobile_brand", SUM("reg_user_brand") AS reg_users
+                            SELECT year, quarter, install_mobile_brand, SUM(reg_user_brand) AS reg_users
                             FROM aggregated_user
-                            GROUP BY "year", "quarter", "install_mobile_brand"
-                            ORDER BY "year", "quarter";
+                            GROUP BY year, quarter, install_mobile_brand
+                            ORDER BY year, quarter;
                             """
 
             df_trend = pd.read_sql(query_trend, engine)
