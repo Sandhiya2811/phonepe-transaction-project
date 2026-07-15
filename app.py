@@ -1,33 +1,61 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
 import plotly.express as px
 
 
-import os
-import psycopg2
+
 import pandas as pd
 from sqlalchemy import create_engine
 
 import mysql.connector
 
+# ---------------------------------------------------------------
+# Page setup (wide layout + icon) makes the whole app feel like a
+# proper interactive dashboard instead of a plain script output.
+# ---------------------------------------------------------------
+st.set_page_config(
+    page_title="PhonePe Pulse Dashboard",
+    page_icon="📱",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
 conn = mysql.connector.connect(
     host='localhost',
     user='root',
-    password='Subash@28',  #your password
-    database='practice'    #schema name
+    password='Subash@28',  
+    database='phonepe'   
 )
 
 cur = conn.cursor()
 
 from sqlalchemy import create_engine
 
-engine = create_engine(
-    "mysql+mysqlconnector://root:Subash%4028@localhost:3306/practice"
-)
+# Cache the engine itself so a brand-new DB connection isn't opened
+# on every rerun (every selectbox click reruns the whole script).
+@st.cache_resource
+def get_engine():
+    return create_engine(
+        "mysql+mysqlconnector://root:Subash%4028@localhost:3306/phonepe"
+    )
 
+engine = get_engine()
 
+# Cache query results for a few minutes so switching back and forth
+# between dropdown options feels instant instead of re-hitting MySQL
+# every single time. Same query + same params -> same cached df.
+@st.cache_data(ttl=600, show_spinner="Fetching data...")
+def run_query(query):
+    return pd.read_sql(query, engine)
+
+# Small helper so every table gets a one-click CSV download button.
+@st.cache_data
+def to_csv(df):
+    return df.to_csv(index=False).encode("utf-8")
+
+st.title("📱 PhonePe Pulse Dashboard")
+st.caption("Interactive exploration of PhonePe transaction, insurance and user data")
+st.divider()
 
 b = st.sidebar.selectbox('Select',['Home','Scenario'])
 if b == 'Home':  
@@ -49,11 +77,12 @@ if b == 'Home':
                     GROUP BY state
                 ) AS state_summary;
             """
-            summary_df = pd.read_sql(summary_query, engine)
+            summary_df = run_query(summary_query)
 
             st.subheader("All States Transaction Summary")
-            st.write("**Overall Transaction Amount:**", summary_df['overall_transaction_amount'][0])
-            st.write("**Average Transaction Amount (per state):**", summary_df['avg_transaction_amount'][0])
+            m1, m2 = st.columns(2)
+            m1.metric("Overall Transaction Amount", f"₹{summary_df['overall_transaction_amount'][0]:,.0f}")
+            m2.metric("Average Transaction Amount (per state)", f"₹{summary_df['avg_transaction_amount'][0]:,.0f}")
                         
             st.title("Top 10 Transactions Insights")
 
@@ -70,9 +99,10 @@ if b == 'Home':
                     ORDER BY total_transaction_amount DESC
                     LIMIT 10;
                 """
-                df = pd.read_sql(query, engine)
+                df = run_query(query)
                 st.subheader("Top 10 Districts - Transactions")
-                st.dataframe(df)
+                st.dataframe(df, use_container_width=True)
+                st.download_button("⬇️ Download CSV", to_csv(df), file_name="districts_transactions.csv", mime="text/csv", key="dl_districts_transactions")
 
             elif option == "Postal codes":
                 query = """
@@ -85,9 +115,10 @@ if b == 'Home':
                     ORDER BY total_transaction_amount DESC
                     LIMIT 10;
                 """
-                df = pd.read_sql(query, engine)
+                df = run_query(query)
                 st.subheader("Top 10 Pincodes - Transactions")
-                st.dataframe(df)
+                st.dataframe(df, use_container_width=True)
+                st.download_button("⬇️ Download CSV", to_csv(df), file_name="pincodes_transactions.csv", mime="text/csv", key="dl_pincodes_transactions")
 
             else:  # State-wise
                 query = """
@@ -99,9 +130,10 @@ if b == 'Home':
                     ORDER BY total_transaction_amount DESC
                     LIMIT 10;
                 """
-                df = pd.read_sql(query, engine)
+                df = run_query(query)
                 st.subheader("Top 10 States - Transactions")
-                st.dataframe(df)
+                st.dataframe(df, use_container_width=True)
+                st.download_button("⬇️ Download CSV", to_csv(df), file_name="states_transactions.csv", mime="text/csv", key="dl_states_transactions")
             
             query_quarter = """
                             SELECT year, quarter, 
@@ -111,17 +143,28 @@ if b == 'Home':
                             ORDER BY year, quarter;
                             """
 
-            df_quarter = pd.read_sql(query_quarter, engine)
+            df_quarter = run_query(query_quarter)
 
             df_quarter['Period'] = df_quarter['year'].astype(str) + "-Q" + df_quarter['quarter'].astype(str)
 
-            quarter_list = df_quarter['Period'].tolist()
+            # Year and Quarter as two separate dropdowns instead of one
+            # combined "2018-Q1" style dropdown. Quarter options are
+            # filtered to only the quarters that actually exist for the
+            # chosen year, so the data shown is always correct.
+            yc, qc = st.columns(2)
+            year_list = sorted(df_quarter['year'].astype(str).unique().tolist())
+            selected_year = yc.selectbox("Select Year", year_list, key="txn_map_year")
 
-            selected_quarter = st.selectbox("Select Year and Quarter", quarter_list)
+            quarter_options = sorted(
+                df_quarter.loc[df_quarter['year'].astype(str) == selected_year, 'quarter']
+                .astype(str).unique().tolist()
+            )
+            selected_q = qc.selectbox("Select Quarter", quarter_options, key="txn_map_quarter")
 
+            selected_quarter = f"{selected_year}-Q{selected_q}"
             st.write("You selected:", selected_quarter)
 
-            year_val, q_val = selected_quarter.split("-Q")
+            year_val, q_val = selected_year, selected_q
 
             
             query_map = f"""
@@ -131,7 +174,7 @@ if b == 'Home':
                         GROUP BY state;
                         """
 
-            df_map = pd.read_sql(query_map, engine)
+            df_map = run_query(query_map)
                 
             df_map["state"] = (
                                 df_map["state"]
@@ -158,7 +201,22 @@ if b == 'Home':
                         hover_data=["total_amount"],
                         title=f"Transaction Amounts - {selected_quarter}"
                     )
-            fig.update_geos(fitbounds="locations", visible=False)
+            fig.update_geos(
+                fitbounds="locations",
+                visible=True,
+                showcountries=True, countrycolor="rgba(130,130,130,0.4)",
+                showcoastlines=True, coastlinecolor="rgba(130,130,130,0.4)",
+                showland=True, landcolor="rgba(235,235,235,0.6)",
+                showocean=True, oceancolor="rgba(210,232,245,0.6)",
+                showlakes=True, lakecolor="rgba(210,232,245,0.6)",
+                bgcolor="rgba(0,0,0,0)",
+            )
+            fig.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                margin=dict(l=0, r=0, t=60, b=0),
+                legend=dict(bgcolor="rgba(255,255,255,0.5)"),
+            )
             st.plotly_chart(fig, use_container_width=True)
             
         if x == 'user':
@@ -167,10 +225,10 @@ if b == 'Home':
                     SUM(registered_users) AS overall_registered_users
                 FROM top_user;
             """
-            summary_df = pd.read_sql(summary_query, engine)
+            summary_df = run_query(summary_query)
 
             st.subheader("All States Users Summary")
-            st.write("**Overall Registered Users:**", summary_df['overall_registered_users'][0])
+            st.metric("Overall Registered Users", f"{summary_df['overall_registered_users'][0]:,.0f}")
 
             st.title("Top 10 Users Insights")
 
@@ -187,9 +245,10 @@ if b == 'Home':
                     ORDER BY total_registered_users DESC
                     LIMIT 10;
                 """
-                df = pd.read_sql(query, engine)
+                df = run_query(query)
                 st.subheader("Top 10 Districts - Registered Users")
-                st.dataframe(df)
+                st.dataframe(df, use_container_width=True)
+                st.download_button("⬇️ Download CSV", to_csv(df), file_name="districts_users.csv", mime="text/csv", key="dl_districts_users")
 
             elif option == "Postal code":
                 query = """
@@ -201,9 +260,10 @@ if b == 'Home':
                     ORDER BY total_registered_users DESC
                     LIMIT 10;
                 """
-                df = pd.read_sql(query, engine)
+                df = run_query(query)
                 st.subheader("Top 10 Pincodes - Registered Users")
-                st.dataframe(df)
+                st.dataframe(df, use_container_width=True)
+                st.download_button("⬇️ Download CSV", to_csv(df), file_name="pincodes_users.csv", mime="text/csv", key="dl_pincodes_users")
 
             else:  # State-wise
                 query = """
@@ -214,9 +274,10 @@ if b == 'Home':
                     ORDER BY total_registered_users DESC
                     LIMIT 10;
                 """
-                df = pd.read_sql(query, engine)
+                df = run_query(query)
                 st.subheader("Top 10 States - Registered Users")
-                st.dataframe(df)
+                st.dataframe(df, use_container_width=True)
+                st.download_button("⬇️ Download CSV", to_csv(df), file_name="states_users.csv", mime="text/csv", key="dl_states_users")
             
             
             query_quarter = """
@@ -229,17 +290,27 @@ if b == 'Home':
                             """
 
            
-            df_quarter = pd.read_sql(query_quarter, engine)
+            df_quarter = run_query(query_quarter)
 
             df_quarter["Period"] = df_quarter["year"].astype(str) + "-Q" + df_quarter["quarter"].astype(str)
 
-           
-            quarter_list = df_quarter['Period'].unique().tolist()
-            selected_quarter = st.selectbox("Select Year and Quarter", quarter_list)
+            # Two separate dropdowns (Year, Quarter) instead of one
+            # combined dropdown; Quarter options are filtered to the
+            # quarters that actually exist for the chosen year.
+            yc, qc = st.columns(2)
+            year_list = sorted(df_quarter['year'].astype(str).unique().tolist())
+            selected_year = yc.selectbox("Select Year", year_list, key="user_map_year")
 
+            quarter_options = sorted(
+                df_quarter.loc[df_quarter['year'].astype(str) == selected_year, 'quarter']
+                .astype(str).unique().tolist()
+            )
+            selected_q = qc.selectbox("Select Quarter", quarter_options, key="user_map_quarter")
+
+            selected_quarter = f"{selected_year}-Q{selected_q}"
             st.write("You selected:", selected_quarter)
 
-            year_val, q_val = selected_quarter.split("-Q")
+            year_val, q_val = selected_year, selected_q
 
        
             df_map = df_quarter[
@@ -275,7 +346,22 @@ if b == 'Home':
                     )
 
          
-            fig.update_geos(fitbounds="locations", visible=False)
+            fig.update_geos(
+                fitbounds="locations",
+                visible=True,
+                showcountries=True, countrycolor="rgba(130,130,130,0.4)",
+                showcoastlines=True, coastlinecolor="rgba(130,130,130,0.4)",
+                showland=True, landcolor="rgba(235,235,235,0.6)",
+                showocean=True, oceancolor="rgba(210,232,245,0.6)",
+                showlakes=True, lakecolor="rgba(210,232,245,0.6)",
+                bgcolor="rgba(0,0,0,0)",
+            )
+            fig.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                margin=dict(l=0, r=0, t=60, b=0),
+                legend=dict(bgcolor="rgba(255,255,255,0.5)"),
+            )
 
          
             st.plotly_chart(fig, use_container_width=True)
@@ -292,11 +378,12 @@ if b == 'Home':
                 GROUP BY state
             ) AS state_summary;
         """
-        summary_df = pd.read_sql(summary_query, engine)
+        summary_df = run_query(summary_query)
 
         st.subheader("All States Insurance Summary")
-        st.write("**Overall Insurance Amount:**", summary_df['overall_insurance_amount'][0])
-        st.write("**Average Insurance Amount:**", summary_df['avg_insurance_amount'][0])
+        m1, m2 = st.columns(2)
+        m1.metric("Overall Insurance Amount", f"₹{summary_df['overall_insurance_amount'][0]:,.0f}")
+        m2.metric("Average Insurance Amount", f"₹{summary_df['avg_insurance_amount'][0]:,.0f}")
         
         st.title("Top 10 Insurance Insights")
         option = st.selectbox("Select View", ["Districts", "Postal code", "States"])
@@ -312,9 +399,10 @@ if b == 'Home':
                 ORDER BY total_insurance_amount DESC
                 LIMIT 10;
             """
-            df = pd.read_sql(query, engine)
+            df = run_query(query)
             st.subheader("Top 10 Districts - Insurance")
-            st.dataframe(df)
+            st.dataframe(df, use_container_width=True)
+            st.download_button("⬇️ Download CSV", to_csv(df), file_name="districts_insurance.csv", mime="text/csv", key="dl_districts_insurance")
 
         elif option == "Postal code":
             query = """
@@ -327,9 +415,10 @@ if b == 'Home':
                 ORDER BY total_insurance_amount DESC
                 LIMIT 10;
             """
-            df = pd.read_sql(query, engine)
+            df = run_query(query)
             st.subheader("Top 10 Pincodes - Insurance")
-            st.dataframe(df)
+            st.dataframe(df, use_container_width=True)
+            st.download_button("⬇️ Download CSV", to_csv(df), file_name="pincodes_insurance.csv", mime="text/csv", key="dl_pincodes_insurance")
 
         else:  # State-wise
             query = """
@@ -341,9 +430,10 @@ if b == 'Home':
                 ORDER BY total_insurance_amount DESC
                 LIMIT 10;
             """
-            df = pd.read_sql(query, engine)
+            df = run_query(query)
             st.subheader("Top 10 States - Insurance")
-            st.dataframe(df)
+            st.dataframe(df, use_container_width=True)
+            st.download_button("⬇️ Download CSV", to_csv(df), file_name="states_insurance.csv", mime="text/csv", key="dl_states_insurance")
         
         query_quarter = """
                         SELECT `year`, `quarter`,
@@ -353,18 +443,28 @@ if b == 'Home':
                         GROUP BY `year`, `quarter`
                         ORDER BY `year`, `quarter`;
                         """
-        df_quarter = pd.read_sql(query_quarter, engine)
+        df_quarter = run_query(query_quarter)
 
         
         df_quarter['Period'] = df_quarter['year'].astype(str) + "-Q" + df_quarter['quarter'].astype(str)
 
-     
-        quarter_list = df_quarter['Period'].tolist()
-        selected_quarter = st.selectbox("Select Year and Quarter", quarter_list)
+        # Two separate dropdowns (Year, Quarter) instead of one combined
+        # dropdown; Quarter options are filtered to the quarters that
+        # actually exist for the chosen year so the map data is correct.
+        yc, qc = st.columns(2)
+        year_list = sorted(df_quarter['year'].astype(str).unique().tolist())
+        selected_year = yc.selectbox("Select Year", year_list, key="ins_map_year")
+
+        quarter_options = sorted(
+            df_quarter.loc[df_quarter['year'].astype(str) == selected_year, 'quarter']
+            .astype(str).unique().tolist()
+        )
+        selected_q = qc.selectbox("Select Quarter", quarter_options, key="ins_map_quarter")
+
+        selected_quarter = f"{selected_year}-Q{selected_q}"
         st.write("You selected:", selected_quarter)
 
-        
-        year_val, q_val = selected_quarter.split("-Q")
+        year_val, q_val = selected_year, selected_q
 
   
         query_map = f"""
@@ -376,7 +476,7 @@ if b == 'Home':
                     WHERE `year` = {year_val} AND `quarter` = {q_val}
                     GROUP BY state;
                 """
-        df_map = pd.read_sql(query_map, engine)
+        df_map = run_query(query_map)
 
    
         df_map["state"] = (
@@ -405,7 +505,22 @@ if b == 'Home':
                 hover_data=["total_ins_amount", "total_ins_count", "avg_ins_amount"],
                 scope="asia"
             )
-        fig.update_geos(fitbounds="locations", visible=False)
+        fig.update_geos(
+            fitbounds="locations",
+            visible=True,
+            showcountries=True, countrycolor="rgba(130,130,130,0.4)",
+            showcoastlines=True, coastlinecolor="rgba(130,130,130,0.4)",
+            showland=True, landcolor="rgba(235,235,235,0.6)",
+            showocean=True, oceancolor="rgba(210,232,245,0.6)",
+            showlakes=True, lakecolor="rgba(210,232,245,0.6)",
+            bgcolor="rgba(0,0,0,0)",
+        )
+        fig.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            margin=dict(l=0, r=0, t=60, b=0),
+            legend=dict(bgcolor="rgba(255,255,255,0.5)"),
+        )
         st.plotly_chart(fig, use_container_width=True)
         
 
@@ -432,7 +547,7 @@ if b == 'Scenario':
                         GROUP BY state
                         ORDER BY total_amount DESC;
                         """
-            df_state = pd.read_sql(query_state, engine)
+            df_state = run_query(query_state)
 
             fig = px.bar(
                 df_state,
@@ -465,7 +580,7 @@ if b == 'Scenario':
                             GROUP BY year, quarter
                             ORDER BY year, quarter;
                             """
-            df_quarter = pd.read_sql(query_quarter, engine)
+            df_quarter = run_query(query_quarter)
 
             df_quarter['Period'] = df_quarter['year'].astype(str) + "-Q" + df_quarter['quarter'].astype(str)
 
@@ -499,7 +614,7 @@ if b == 'Scenario':
                         ORDER BY total_amount DESC;
                         """
 
-            df_type = pd.read_sql(query_type, engine)
+            df_type = run_query(query_type)
             
             fig = px.pie(df_type,
              values="total_amount",
@@ -527,7 +642,7 @@ if b == 'Scenario':
                             ORDER BY total_amount DESC;
                             """
 
-            df_heatmap = pd.read_sql(query_heatmap, engine)
+            df_heatmap = run_query(query_heatmap)
             
             pivot = df_heatmap.pivot(index="state", columns="transaction_type", values="total_amount")
             
@@ -568,7 +683,7 @@ if b == 'Scenario':
                                 ORDER BY total_users DESC;
                                 """
 
-            df_brand = pd.read_sql(query_brand_share, engine)
+            df_brand = run_query(query_brand_share)
             
             fig = px.pie(df_brand,
                         names="install_mobile_brand",
@@ -595,7 +710,7 @@ if b == 'Scenario':
                                 ORDER BY reg_users DESC;
                                 """
 
-            df_engagement = pd.read_sql(query_engagement, engine)
+            df_engagement = run_query(query_engagement)
             
             fig = px.scatter(df_engagement,
                  x="reg_users",
@@ -610,7 +725,7 @@ if b == 'Scenario':
             st.markdown("""
             **Insights:**
                     1. Some brands show app opens very low.
-                    2. Users register but don’t use regularly.
+                    2. Users register but don't use regularly.
                     3. Need better app performance for them.
                     
                     """)
@@ -626,7 +741,7 @@ if b == 'Scenario':
                             ORDER BY state, reg_users DESC;
                             """
 
-            df_region = pd.read_sql(query_region, engine)
+            df_region = run_query(query_region)
             
             fig = px.bar(df_region,
              x="state",
@@ -656,7 +771,7 @@ if b == 'Scenario':
                             ORDER BY year, quarter;
                             """
 
-            df_trend = pd.read_sql(query_trend, engine)
+            df_trend = run_query(query_trend)
             
             df_trend['Period'] = df_trend['year'].astype(str) + "-Q" + df_trend['quarter'].astype(str)
             
@@ -694,7 +809,7 @@ if b == 'Scenario':
                     ORDER BY total_amount DESC
                     LIMIT 10;
                     """
-            state_data = pd.read_sql(query1, engine)
+            state_data = run_query(query1)
             
             fig1 = px.bar(
                         state_data,
@@ -725,7 +840,7 @@ if b == 'Scenario':
                     ORDER BY total_count DESC
                     LIMIT 10;
                     """
-            district_data = pd.read_sql(query2, engine)
+            district_data = run_query(query2)
             
             fig2 = px.bar(
                         district_data,
@@ -755,7 +870,7 @@ if b == 'Scenario':
                     ORDER BY total_amount DESC
                     LIMIT 10;
                     """
-            pincode_data = pd.read_sql(query3, engine)
+            pincode_data = run_query(query3)
             
             fig3 = px.pie(
                         pincode_data,
@@ -781,7 +896,7 @@ if b == 'Scenario':
                     GROUP BY year, quarter
                     ORDER BY year, quarter;
                     """
-            trend_data = pd.read_sql(query4, engine)
+            trend_data = run_query(query4)
             
             trend_data["year_quarter"] = trend_data["year"].astype(str) + "-Q" + trend_data["quarter"].astype(str)
             
@@ -818,7 +933,7 @@ if b == 'Scenario':
                     ORDER BY total_count DESC
                     LIMIT 10;
                     """
-            df_state_count = pd.read_sql(query, engine)
+            df_state_count = run_query(query)
             
             fig = px.bar(df_state_count, x='state', y='total_count',
                         title='Top 10 States by Transaction Volume (2023 Q1)',
@@ -844,7 +959,7 @@ if b == 'Scenario':
                     ORDER BY total_amount DESC
                     LIMIT 10;
                     """
-            df_state_value = pd.read_sql(query, engine)
+            df_state_value = run_query(query)
             
             fig = px.bar(df_state_value, x='state', y='total_amount',
                         title='Top 10 States by Transaction Value (2023 Q1)',
@@ -872,7 +987,7 @@ if b == 'Scenario':
                     LIMIT 10;
                     """
 
-            df_district_count = pd.read_sql(query, engine)
+            df_district_count = run_query(query)
             
             fig = px.bar(df_district_count, x='district', y='total_count',
                         title='Top 10 Districts by Transaction Volume (2023 Q1)',
@@ -899,7 +1014,7 @@ if b == 'Scenario':
                     LIMIT 10;
                     """
 
-            df_pincode_value = pd.read_sql(query, engine)
+            df_pincode_value = run_query(query)
 
             fig = px.bar(df_pincode_value, x='pincode', y='total_amount',
                         title='Top 10 Pincodes by Transaction Value (2023 Q1)',
@@ -924,7 +1039,7 @@ if b == 'Scenario':
                     GROUP BY location_type;
                     """
 
-            df_type = pd.read_sql(query, engine)
+            df_type = run_query(query)
             
             fig_count = px.pie(df_type, names='location_type', values='total_count',
                    title='Transaction Volume: District vs Pincode (2023 Q1)')
@@ -961,7 +1076,7 @@ if b == 'Scenario':
                     ORDER BY reg_users DESC
                     LIMIT 10;
                     """
-            df_states = pd.read_sql(query1, engine)
+            df_states = run_query(query1)
             fig = px.bar(df_states, x='state', y='reg_users',
                         title='Top 10 States by Registered Users (2023 Q1)',
                         text_auto=True, color='state')
@@ -989,7 +1104,7 @@ if b == 'Scenario':
                     LIMIT 10;
                     """
 
-            df_districts = pd.read_sql(query2, engine)
+            df_districts = run_query(query2)
             
             fig = px.bar(df_districts, x='district', y='reg_users',
                         title='Top 10 Districts by Registered Users (2023 Q1)',
@@ -1017,7 +1132,7 @@ if b == 'Scenario':
                     LIMIT 10;
                     """
 
-            df_pincode_value = pd.read_sql(query, engine)
+            df_pincode_value = run_query(query)
             
             fig = px.bar(df_pincode_value, x='pincode', y='total_amount',
                         title='Top 10 Pincodes by Transaction Value (2023 Q1)',
@@ -1042,7 +1157,7 @@ if b == 'Scenario':
                     ORDER BY year, quarter;
                     """
 
-            df_trend = pd.read_sql(query4, engine)
+            df_trend = run_query(query4)
             
             fig = px.line(df_trend, x='quarter', y='reg_users', color='year',
                             title='Quarterly Registration Trend for tamil-nadu',
@@ -1055,17 +1170,4 @@ if b == 'Scenario':
                         2. Festival seasons push more sign-ups.
                         3. Some quarters show slower adoption.
                         
-                    """)        
-        
-        
-        
-       
-        
-        
-
-    
-
-    
-
-
-
+                    """)
