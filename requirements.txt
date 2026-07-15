@@ -2,4 +2,4 @@ streamlit
 pandas
 plotly
 sqlalchemy
-mysql-connector-python
+psycopg2-binary
