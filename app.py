@@ -7,7 +7,7 @@ import plotly.express as px
 import pandas as pd
 from sqlalchemy import create_engine
 
-import mysql.connector
+import psycopg2
 
 # ---------------------------------------------------------------
 # Page setup (wide layout + icon) makes the whole app feel like a
@@ -20,7 +20,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-conn = psycopg2.connector.connect(
+conn = psycopg2.connect(
     host='dpg-d9bhnm7aqgkc739e2fc0-a.singapore-postgres.render.com',
     user="phonepe_azst_user",
     password='cqDPwTuKyebyTKZsDk2wof1y37ngovSK',  
@@ -282,8 +282,8 @@ if b == 'Home':
             
             query_quarter = """
                             SELECT year, quarter, state,
-                                SUM(`registeredUsers`) AS total_users,
-                                SUM(`appOpens`) AS total_appopens
+                                SUM(registeredUsers) AS total_users,
+                                SUM(appOpens) AS total_appopens
                             FROM map_user
                             GROUP BY year, quarter, state
                             ORDER BY year, quarter, state;
@@ -436,12 +436,12 @@ if b == 'Home':
             st.download_button("⬇️ Download CSV", to_csv(df), file_name="states_insurance.csv", mime="text/csv", key="dl_states_insurance")
         
         query_quarter = """
-                        SELECT `year`, `quarter`,
+                        SELECT year, quarter,
                             SUM(Insurance_amount) AS total_ins_amount,
                             SUM(Insurance_count) AS total_ins_count
                         FROM aggregated_insurance
-                        GROUP BY `year`, `quarter`
-                        ORDER BY `year`, `quarter`;
+                        GROUP BY year, quarter
+                        ORDER BY year, quarter;
                         """
         df_quarter = run_query(query_quarter)
 
@@ -473,7 +473,7 @@ if b == 'Home':
                         SUM(Insurance_amount) AS total_ins_amount,
                         SUM(Insurance_count) AS total_ins_count
                     FROM aggregated_insurance
-                    WHERE `year` = {year_val} AND `quarter` = {q_val}
+                    WHERE year = {year_val} AND quarter = {q_val}
                     GROUP BY state;
                 """
         df_map = run_query(query_map)
