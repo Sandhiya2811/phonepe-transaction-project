@@ -20,7 +20,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-conn = mysql.connector.connect(
+conn = psycopg2.connector.connect(
     host='dpg-d9bhnm7aqgkc739e2fc0-a.singapore-postgres.render.com',
     user="phonepe_azst_user",
     password='cqDPwTuKyebyTKZsDk2wof1y37ngovSK',  
