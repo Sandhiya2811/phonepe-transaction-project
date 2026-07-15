@@ -21,10 +21,10 @@ st.set_page_config(
 )
 
 conn = mysql.connector.connect(
-    host='localhost',
-    user='root',
-    password='Subash@28',  
-    database='phonepe'   
+    host='dpg-d9bhnm7aqgkc739e2fc0-a.singapore-postgres.render.com',
+    user="phonepe_azst_user",
+    password='cqDPwTuKyebyTKZsDk2wof1y37ngovSK',  
+    database='phonepe_azst'   
 )
 
 cur = conn.cursor()
@@ -36,7 +36,7 @@ from sqlalchemy import create_engine
 @st.cache_resource
 def get_engine():
     return create_engine(
-        "mysql+mysqlconnector://root:Subash%4028@localhost:3306/phonepe"
+        "postgresql+psycopg2://phonepe_azst_user:cqDPwTuKyebyTKZsDk2wof1y37ngovSK@dpg-d9bhnm7aqgkc739e2fc0-a.singapore-postgres.render.com/phonepe_azst"
     )
 
 engine = get_engine()
