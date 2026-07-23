@@ -282,8 +282,8 @@ if b == 'Home':
             
             query_quarter = """
                             SELECT year, quarter, state,
-                                SUM(registeredUsers) AS total_users,
-                                SUM(appOpens) AS total_appopens
+                                SUM("registeredUsers") AS total_users,
+                                SUM("appOpens") AS total_appopens
                             FROM map_user
                             GROUP BY year, quarter, state
                             ORDER BY year, quarter, state;
@@ -469,9 +469,9 @@ if b == 'Home':
   
         query_map = f"""
                     SELECT state,
-                        AVG(Insurance_amount) AS avg_ins_amount,
-                        SUM(Insurance_amount) AS total_ins_amount,
-                        SUM(Insurance_count) AS total_ins_count
+                        AVG("Insurance_amount") AS avg_ins_amount,
+                        SUM("Insurance_amount") AS total_ins_amount,
+                        SUM("Insurance_count") AS total_ins_count
                     FROM aggregated_insurance
                     WHERE year = {year_val} AND quarter = {q_val}
                     GROUP BY state;
